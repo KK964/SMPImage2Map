@@ -18,6 +18,11 @@ public class Image2MapConfig {
 
   public int minPermLevel = 2;
 
+  public boolean useBundle = true;
+
+  public boolean opOverrideQtyCheck = true;
+
+  public boolean checkQty = true;
 
   public static Image2MapConfig loadOrCreateConfig() {
     try {

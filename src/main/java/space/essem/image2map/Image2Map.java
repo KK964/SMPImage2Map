@@ -21,6 +21,7 @@ import net.minecraft.nbt.NbtElement;
 import net.minecraft.nbt.NbtList;
 import net.minecraft.nbt.NbtString;
 import net.minecraft.server.command.ServerCommandSource;
+import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.Hand;
@@ -83,11 +84,11 @@ public class Image2Map implements ModInitializer {
         ServerCommandSource source = context.getSource();
         String input = StringArgumentType.getString(context, "path");
 
-        source.sendFeedback(Text.literal("Getting image..."), false);
+        source.sendFeedback(Text.literal("Getting image...").formatted(Formatting.YELLOW), false);
 
         getImage(input).orTimeout(60, TimeUnit.SECONDS).handleAsync((image, ex) -> {
             if (image == null || ex != null) {
-                source.sendFeedback(Text.literal("That doesn't seem to be a valid image!"), false);
+                source.sendFeedback(Text.literal("That doesn't seem to be a valid image!").formatted(Formatting.RED), false);
             }
 
             if (GuiHelpers.getCurrentGui(source.getPlayer()) instanceof PreviewGui previewGui) {
@@ -161,11 +162,11 @@ public class Image2Map implements ModInitializer {
 
         String input = StringArgumentType.getString(context, "path");
 
-        source.sendFeedback(Text.literal("Getting image..."), false);
+        source.sendFeedback(Text.literal("Getting image...").formatted(Formatting.YELLOW), false);
 
         getImage(input).orTimeout(60, TimeUnit.SECONDS).handleAsync((image, ex) -> {
             if (image == null || ex != null) {
-                source.sendFeedback(Text.literal("That doesn't seem to be a valid image!"), false);
+                source.sendFeedback(Text.literal("That doesn't seem to be a valid image!").formatted(Formatting.RED), false);
             }
 
             int width;
@@ -182,12 +183,12 @@ public class Image2Map implements ModInitializer {
 
             int finalHeight = height;
             int finalWidth = width;
-            source.sendFeedback(Text.literal("Converting into maps..."), false);
+            source.sendFeedback(Text.literal("Converting into maps...").formatted(Formatting.YELLOW), false);
 
             CompletableFuture.supplyAsync(() -> MapRenderer.render(image, mode, finalWidth, finalHeight)).thenAcceptAsync(mapImage -> {
                 var items = MapRenderer.toVanillaItems(mapImage, source.getWorld(), input);
-                giveToPlayer(player, items, input, finalWidth, finalHeight);
-                source.sendFeedback(Text.literal("Done!"), false);
+                boolean success = giveToPlayer(player, items, input, finalWidth, finalHeight);
+                if (success) source.sendFeedback(Text.literal("Done!").formatted(Formatting.GREEN), false);
             }, source.getServer());
             return null;
         }, source.getServer());
@@ -195,10 +196,17 @@ public class Image2Map implements ModInitializer {
         return 1;
     }
 
-    public static void giveToPlayer(PlayerEntity player, List<ItemStack> items, String input, int width, int height) {
+    public static boolean giveToPlayer(PlayerEntity player, List<ItemStack> items, String input, int width, int height) {
+        int mapCount = player.getInventory().count(Items.MAP);
+
+        if (CONFIG.checkQty && mapCount < items.size() && (!CONFIG.opOverrideQtyCheck && !player.hasPermissionLevel(2)) && !player.isCreative()) {
+            player.sendMessage(Text.literal("You don't have enough maps in your inventory!").formatted(Formatting.RED), false);
+            return false;
+        }
+
         if (items.size() == 1) {
             player.giveItemStack(items.get(0));
-        } else {
+        } else if (CONFIG.useBundle) {
             var bundle = new ItemStack(Items.BUNDLE);
             var list = new NbtList();
 
@@ -216,7 +224,26 @@ public class Image2Map implements ModInitializer {
             bundle.setCustomName(Text.literal("Maps").formatted(Formatting.GOLD));
 
             player.giveItemStack(bundle);
+        } else {
+            for (int i = 0; i < items.size(); i++) {
+                ItemStack item = items.get(i);
+
+                int x = i % (width / 128);
+                int y = i / (width / 128);
+
+                var lore = new NbtList();
+                lore.add(NbtString.of(Text.Serializer.toJson(Text.literal( " (" + x + ", " + y + ")").formatted(Formatting.GRAY))));
+                item.getOrCreateSubNbt("display").put("Lore", lore);
+                player.getInventory().offerOrDrop(item);
+            }
         }
+
+        player.getInventory().remove(
+                (stack) -> stack.getItem().equals(Items.MAP),
+                items.size(),
+                player.playerScreenHandler.getCraftingInput()
+        );
+        return true;
     }
 
     public static boolean clickItemFrame(PlayerEntity player, Hand hand, ItemFrameEntity itemFrameEntity) {
@@ -281,6 +308,7 @@ public class Image2Map implements ModInitializer {
                 }
             }
 
+            stack.decrement(1);
             return true;
         }
 
