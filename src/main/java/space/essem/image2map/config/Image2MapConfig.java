@@ -24,6 +24,8 @@ public class Image2MapConfig {
 
   public boolean checkQty = true;
 
+  public boolean resetableMaps = true;
+
   public static Image2MapConfig loadOrCreateConfig() {
     try {
       Image2MapConfig config;
