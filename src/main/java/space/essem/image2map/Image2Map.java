@@ -200,7 +200,7 @@ public class Image2Map implements ModInitializer {
         int mapCount = player.getInventory().count(Items.MAP);
 
         if (CONFIG.checkQty && mapCount < items.size() && (!CONFIG.opOverrideQtyCheck && !player.hasPermissionLevel(2)) && !player.isCreative()) {
-            player.sendMessage(Text.literal("You don't have enough maps in your inventory!").formatted(Formatting.RED), false);
+            player.sendMessage(Text.literal("You don't have enough maps in your inventory! You need " + (items.size() - mapCount) + " more maps!").formatted(Formatting.RED), false);
             return false;
         }
 
